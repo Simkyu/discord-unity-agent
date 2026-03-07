@@ -4,6 +4,7 @@ import asyncio
 from collections import deque
 from typing import TYPE_CHECKING
 
+from agent.prompt import build_feedback_prompt
 from agent.runner import run_claude
 
 if TYPE_CHECKING:
@@ -25,20 +26,8 @@ class AgentSession:
         self._feedback_queue.append(message)
 
     async def start(self, command: str, reporter: Reporter) -> None:
-        self.is_running = True
         await reporter.send(f"작업 시작: `{command[:100]}`")
-
-        reporter.start_streaming()
-        try:
-            await run_claude(
-                command,
-                on_output=reporter.stream_append,
-                on_done=self._make_done_handler(reporter),
-            )
-        finally:
-            await reporter.stop_streaming()
-            self.is_running = False
-
+        await self._run(command, reporter)
         await self._process_feedback_queue(reporter)
 
     def _make_done_handler(self, reporter: Reporter):
@@ -53,5 +42,21 @@ class AgentSession:
     async def _process_feedback_queue(self, reporter: Reporter) -> None:
         if self._feedback_queue:
             feedback = self._feedback_queue.popleft()
-            await reporter.send(f"피드백 처리 시작: `{feedback[:100]}`")
-            await self.start(feedback, reporter)
+            await reporter.send(f"피드백 반영 시작: `{feedback[:100]}`")
+            await self._run(build_feedback_prompt(feedback), reporter)
+            await self._process_feedback_queue(reporter)
+
+    async def _run(self, prompt: str, reporter: Reporter) -> None:
+        """빌드된 프롬프트를 직접 실행. start()는 사용자 명령용, _run()은 내부 재귀용."""
+        self.is_running = True
+        reporter.start_streaming()
+        try:
+            await run_claude(
+                prompt,
+                on_output=reporter.stream_append,
+                on_done=self._make_done_handler(reporter),
+                raw_prompt=True,
+            )
+        finally:
+            await reporter.stop_streaming()
+            self.is_running = False

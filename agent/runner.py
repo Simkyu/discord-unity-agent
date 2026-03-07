@@ -12,12 +12,14 @@ async def run_claude(
     command: str,
     on_output: OnOutputCallback,
     on_done: OnDoneCallback,
+    raw_prompt: bool = False,
 ) -> None:
     """
     Claude Code CLI를 서브프로세스로 실행한다.
+    raw_prompt=True 이면 command를 그대로 프롬프트로 사용 (이미 빌드된 경우).
     stdout은 on_output으로 라인 단위 스트리밍, 종료 시 on_done 호출.
     """
-    prompt = build_prompt(command)
+    prompt = command if raw_prompt else build_prompt(command)
 
     proc = await asyncio.create_subprocess_exec(
         config.CLAUDE_PATH,
