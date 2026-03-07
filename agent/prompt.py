@@ -93,6 +93,31 @@ def build_feedback_prompt(feedback: str) -> str:
 # ──────────────────────────────────────────────
 # MD 스펙 기반 단일 항목 구현 프롬프트
 # ──────────────────────────────────────────────
+def build_spec_prepare_prompt(md_path: str) -> str:
+    system = _SYSTEM_CONTEXT.format(unity_path=config.UNITY_PROJECT_PATH)
+    return f"""{system}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+[MD 스펙 체크리스트 변환]
+━━━━━━━━━━━━━━━━━━━━━━━━
+스펙 파일: {md_path}
+
+아래 순서를 정확히 따른다:
+
+1. {md_path} 파일을 읽는다.
+2. 문서에서 구현 가능한 개발 항목을 추출하여 `- [ ]` 형식의 체크리스트 섹션을 파일 맨 끝에 추가한다.
+   - 섹션 제목: `## 구현 체크리스트`
+   - 각 항목은 `- [ ] 항목 설명` 형식으로 작성한다.
+   - 항목은 구체적이고 독립적으로 구현 가능한 단위로 분리한다.
+   - 기존 문서 내용은 절대 수정하지 않는다.
+3. 변환 완료 후 [완료] 태그로 추가된 체크리스트 항목 수를 보고한다.
+
+규칙:
+- 기존 파일 내용을 지우거나 바꾸지 않는다. 끝에만 추가한다.
+- git commit 하지 않는다.
+"""
+
+
 def build_spec_prompt(md_path: str) -> str:
     system = _SYSTEM_CONTEXT.format(unity_path=config.UNITY_PROJECT_PATH)
     return f"""{system}

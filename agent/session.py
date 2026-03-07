@@ -4,7 +4,7 @@ import asyncio
 from collections import deque
 from typing import TYPE_CHECKING
 
-from agent.prompt import build_feedback_prompt, build_spec_prompt
+from agent.prompt import build_feedback_prompt, build_spec_prepare_prompt, build_spec_prompt
 from agent.runner import run_claude
 from agent.spec import count_remaining, count_total, has_remaining, resolve_md_path
 
@@ -41,6 +41,15 @@ class AgentSession:
         """MD 스펙 파일 기반 반복 개발 루프."""
         total = count_total(md_path)
         remaining = count_remaining(md_path)
+
+        if total == 0:
+            await reporter.send(
+                f"체크리스트 항목 없음. GDD를 분석하여 구현 체크리스트를 생성합니다.\n"
+                f"파일: `{md_path}`"
+            )
+            await self._run(build_spec_prepare_prompt(md_path), reporter)
+            total = count_total(md_path)
+            remaining = count_remaining(md_path)
 
         await reporter.send(
             f"스펙 기반 개발 시작\n"
