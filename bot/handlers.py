@@ -12,8 +12,6 @@ from bot.reporter import Reporter
 if TYPE_CHECKING:
     from agent.session import AgentSession
 
-_DOCS_DIR = Path(config.UNITY_PROJECT_PATH) / "docs"
-
 
 class MessageHandler:
     def __init__(self, session: AgentSession) -> None:
@@ -54,8 +52,9 @@ class MessageHandler:
         reporter: Reporter,
     ) -> None:
         """MD 첨부파일을 docs/ 에 저장하고 스펙 루프 시작."""
-        _DOCS_DIR.mkdir(parents=True, exist_ok=True)
-        save_path = _DOCS_DIR / attachment.filename
+        docs_dir = Path(config.UNITY_PROJECT_PATH) / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        save_path = docs_dir / attachment.filename
 
         await reporter.send(
             f"MD 파일 수신: `{attachment.filename}`\n"
