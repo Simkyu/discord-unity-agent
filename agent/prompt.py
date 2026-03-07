@@ -88,3 +88,31 @@ def build_prompt(user_command: str) -> str:
 def build_feedback_prompt(feedback: str) -> str:
     system = _SYSTEM_CONTEXT.format(unity_path=config.UNITY_PROJECT_PATH)
     return f"{system}\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n[명령]\n━━━━━━━━━━━━━━━━━━━━━━━━\n[피드백] {feedback}"
+
+
+# ──────────────────────────────────────────────
+# MD 스펙 기반 단일 항목 구현 프롬프트
+# ──────────────────────────────────────────────
+def build_spec_prompt(md_path: str) -> str:
+    system = _SYSTEM_CONTEXT.format(unity_path=config.UNITY_PROJECT_PATH)
+    return f"""{system}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+[MD 스펙 기반 개발 모드]
+━━━━━━━━━━━━━━━━━━━━━━━━
+스펙 파일: {md_path}
+
+아래 순서를 정확히 따른다:
+
+1. {md_path} 파일을 읽어 미완료 항목(- [ ]) 목록을 확인한다.
+2. 가장 위에 있는 미완료 항목 하나만 구현한다.
+   - 구현 전 [진행] 태그로 해당 항목명을 Discord에 보고한다.
+   - [1]번 자율 개발 루프 규칙을 따라 에러 발생 시 스스로 수정 반복한다.
+3. 구현 완료 후 {md_path} 파일에서 해당 항목의 `- [ ]`를 `- [x]`로 변경한다.
+4. git commit을 수행한다. (형식: [TYPE] 항목명)
+5. [완료] 태그로 구현 내용을 보고한 뒤 종료한다.
+
+규칙:
+- 반드시 항목 하나만 처리하고 종료한다. 다음 항목은 처리하지 않는다.
+- 구현 불가 시 [실패] 태그로 사유를 보고하고 해당 항목은 - [ ] 그대로 둔다.
+"""
