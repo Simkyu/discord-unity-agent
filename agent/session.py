@@ -4,8 +4,22 @@ import asyncio
 import datetime
 import re
 from collections import deque
+from pathlib import Path
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+_LAST_MD_FILE = Path(__file__).parent.parent / ".last_md_path"
+
+
+def _load_last_md_path() -> str | None:
+    if _LAST_MD_FILE.exists():
+        path = _LAST_MD_FILE.read_text(encoding="utf-8").strip()
+        return path if path else None
+    return None
+
+
+def _save_last_md_path(path: str) -> None:
+    _LAST_MD_FILE.write_text(path, encoding="utf-8")
 
 from agent.prompt import build_feedback_prompt, build_spec_prepare_prompt, build_spec_prompt
 from agent.runner import RateLimitError, run_claude
@@ -50,14 +64,17 @@ class AgentSession:
     def __init__(self) -> None:
         self.is_running: bool = False
         self._feedback_queue: deque[str] = deque()
+        self._last_md_path: str | None = _load_last_md_path()
 
     def enqueue_feedback(self, message: str) -> None:
         self._feedback_queue.append(message)
 
     async def start(self, command: str, reporter: Reporter) -> None:
         """Discord 명령을 수신하여 처리. MD 경로 감지 시 스펙 모드로 진입."""
-        md_path = resolve_md_path(command)
+        md_path = resolve_md_path(command) or self._last_md_path
         if md_path:
+            self._last_md_path = md_path
+            _save_last_md_path(md_path)
             await self._run_spec_loop(md_path, reporter)
         else:
             await reporter.send(f"작업 시작: `{command[:100]}`")

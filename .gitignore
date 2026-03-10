@@ -1,4 +1,5 @@
 .env
+.last_md_path
 __pycache__/
 *.py[cod]
 .venv/
