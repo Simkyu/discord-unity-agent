@@ -6,6 +6,8 @@ from pathlib import Path
 
 import config
 
+AGENT_CONTEXT_PATH = Path(config.UNITY_PROJECT_PATH) / "docs" / "agent_context.md"
+
 
 def resolve_md_path(command: str) -> str | None:
     """
@@ -43,3 +45,17 @@ def count_total(md_path: str) -> int:
 
 def has_remaining(md_path: str) -> bool:
     return count_remaining(md_path) > 0
+
+
+def next_item(md_path: str) -> str | None:
+    """첫 번째 미완료 항목 텍스트 반환."""
+    text = Path(md_path).read_text(encoding="utf-8")
+    m = re.search(r"- \[ \] (.+)", text)
+    return m.group(1).strip() if m else None
+
+
+def read_agent_context() -> str | None:
+    """agent_context.md 내용 반환. 없으면 None."""
+    if AGENT_CONTEXT_PATH.exists():
+        return AGENT_CONTEXT_PATH.read_text(encoding="utf-8")
+    return None

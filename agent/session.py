@@ -1,12 +1,40 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
+import re
 from collections import deque
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from agent.prompt import build_feedback_prompt, build_spec_prepare_prompt, build_spec_prompt
-from agent.runner import run_claude
-from agent.spec import count_remaining, count_total, has_remaining, resolve_md_path
+from agent.runner import RateLimitError, run_claude
+from agent.spec import count_remaining, count_total, has_remaining, next_item, resolve_md_path
+
+
+def _seconds_until_reset(reset_str: str) -> float:
+    """'4am (Asia/Seoul)' 형식 문자열을 파싱하여 남은 초 반환. 파싱 실패 시 3600."""
+    m = re.match(r"(\d{1,2})(?::(\d{2}))?(am|pm)\s*\(([^)]+)\)", reset_str, re.IGNORECASE)
+    if not m:
+        return 3600.0
+
+    hour, minute, ampm, tz_name = int(m.group(1)), int(m.group(2) or 0), m.group(3).lower(), m.group(4)
+    if ampm == "pm" and hour != 12:
+        hour += 12
+    elif ampm == "am" and hour == 12:
+        hour = 0
+
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("Asia/Seoul")
+
+    now = datetime.datetime.now(tz)
+    reset = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if reset <= now:
+        reset += datetime.timedelta(days=1)
+
+    return max((reset - now).total_seconds() + 60, 60.0)  # +60s 여유
 
 if TYPE_CHECKING:
     from bot.reporter import Reporter
@@ -70,8 +98,21 @@ class AgentSession:
             done = total - remaining
             await reporter.send(f"[{done + 1}/{total}] 다음 항목 구현 중...")
 
-            prompt = build_spec_prompt(md_path)
-            await self._run(prompt, reporter)
+            item = next_item(md_path) or ""
+            prompt = build_spec_prompt(md_path, item)
+            try:
+                await self._run(prompt, reporter)
+            except RateLimitError as e:
+                wait_sec = _seconds_until_reset(e.reset_str)
+                resume_time = datetime.datetime.now(ZoneInfo("Asia/Seoul")) + datetime.timedelta(seconds=wait_sec)
+                await reporter.send(
+                    f"Claude 사용량 한도 도달. {e.reset_str} 리셋 후 자동 재개합니다.\n"
+                    f"재개 예정: {resume_time.strftime('%H:%M')} (KST)\n"
+                    f"진행 상태: {done}/{total}개 완료, {remaining}개 남음"
+                )
+                await asyncio.sleep(wait_sec)
+                await reporter.send("리셋 완료. 스펙 루프를 재개합니다.")
+                continue
 
         await reporter.send(
             f"전체 스펙 구현 완료.\n"

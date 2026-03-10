@@ -1,4 +1,5 @@
 import asyncio
+import re
 from collections.abc import Awaitable, Callable
 
 import config
@@ -6,6 +7,19 @@ from agent.prompt import build_prompt
 
 OnOutputCallback = Callable[[str], Awaitable[None]]
 OnDoneCallback = Callable[[int], Awaitable[None]]
+
+_RATE_LIMIT_RE = re.compile(
+    r"resets\s+(\d{1,2}(?::\d{2})?(?:am|pm))\s*\(([^)]+)\)",
+    re.IGNORECASE,
+)
+
+
+class RateLimitError(Exception):
+    """Claude CLI rate limit 도달 시 발생."""
+
+    def __init__(self, reset_str: str) -> None:
+        self.reset_str = reset_str
+        super().__init__(f"Rate limit hit, resets: {reset_str}")
 
 
 async def run_claude(
@@ -32,9 +46,15 @@ async def run_claude(
     )
 
     assert proc.stdout is not None
+    rate_limit_str: str | None = None
     async for line in proc.stdout:
         decoded = line.decode("utf-8", errors="replace")
         await on_output(decoded)
+        m = _RATE_LIMIT_RE.search(decoded)
+        if m:
+            rate_limit_str = f"{m.group(1)} ({m.group(2)})"
 
     await proc.wait()
+    if rate_limit_str:
+        raise RateLimitError(rate_limit_str)
     await on_done(proc.returncode)

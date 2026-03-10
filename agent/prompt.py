@@ -1,4 +1,5 @@
 import config
+from agent.spec import read_agent_context
 
 # ──────────────────────────────────────────────
 # 공통 시스템 컨텍스트 (모든 명령에 자동 삽입)
@@ -118,22 +119,44 @@ def build_spec_prepare_prompt(md_path: str) -> str:
 """
 
 
-def build_spec_prompt(md_path: str) -> str:
+def build_spec_prompt(md_path: str, item: str) -> str:
     system = _SYSTEM_CONTEXT.format(unity_path=config.UNITY_PROJECT_PATH)
+
+    agent_context = read_agent_context()
+    if agent_context:
+        context_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━
+[프로젝트 현재 상태 - agent_context.md]
+━━━━━━━━━━━━━━━━━━━━━━━━
+{agent_context}
+※ 위 요약을 바탕으로 작업한다. docs/ 전체 탐색 및 dev_log.md 읽기 불필요."""
+    else:
+        context_block = "※ agent_context.md 없음. docs/ 폴더를 탐색하여 프로젝트 현황을 파악한다."
+
     return f"""{system}
+
+{context_block}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
 [MD 스펙 기반 개발 모드]
 ━━━━━━━━━━━━━━━━━━━━━━━━
 스펙 파일: {md_path}
+구현할 항목: {item}
 
 아래 순서를 정확히 따른다:
 
-1. {md_path} 파일을 읽어 미완료 항목(- [ ]) 목록을 확인한다.
-2. 가장 위에 있는 미완료 항목 하나만 구현한다.
-   - 구현 전 [진행] 태그로 해당 항목명을 Discord에 보고한다.
+1. 위 항목을 구현한다.
+   - [진행] 태그로 항목명을 Discord에 보고한다.
    - [1]번 자율 개발 루프 규칙을 따라 에러 발생 시 스스로 수정 반복한다.
-3. 구현 완료 후 {md_path} 파일에서 해당 항목의 `- [ ]`를 `- [x]`로 변경한다.
+2. 구현 완료 후 {md_path} 파일에서 해당 항목의 `- [ ]`를 `- [x]`로 변경한다.
+3. docs/agent_context.md를 아래 형식으로 덮어쓴다 (append 아님):
+   ## 구현 완료 기능
+   - (완료된 항목들 한 줄 요약)
+   ## 핵심 파일
+   - (주요 스크립트 경로 및 역할)
+   ## 현재 상태 및 제약
+   - (Unity 버전, 사용 패키지, 알려진 이슈 등)
+   ## 마지막 작업
+   - (방금 구현한 내용 한 줄)
 4. git commit을 수행한다. (형식: [TYPE] 항목명)
 5. [완료] 태그로 구현 내용을 보고한 뒤 종료한다.
 
