@@ -63,15 +63,19 @@ class AgentSession:
 
     def __init__(self) -> None:
         self.is_running: bool = False
+        self._stop_requested: bool = False
         self._feedback_queue: deque[str] = deque()
         self._last_md_path: str | None = _load_last_md_path()
 
     def enqueue_feedback(self, message: str) -> None:
         self._feedback_queue.append(message)
 
+    def request_stop(self) -> None:
+        self._stop_requested = True
+
     async def start(self, command: str, reporter: Reporter) -> None:
         """Discord 명령을 수신하여 처리. MD 경로 감지 시 스펙 모드로 진입."""
-        md_path = resolve_md_path(command) or self._last_md_path
+        md_path = resolve_md_path(command)
         if md_path:
             self._last_md_path = md_path
             _save_last_md_path(md_path)
@@ -102,8 +106,14 @@ class AgentSession:
             f"전체 항목: {total}개 / 미완료: {remaining}개"
         )
 
+        self._stop_requested = False
         step = 0
         while has_remaining(md_path):
+            if self._stop_requested:
+                await reporter.send("중단 요청으로 스펙 루프를 종료합니다.")
+                self._stop_requested = False
+                return
+
             # 작업 중 피드백이 쌓인 경우 루프 중단하고 먼저 처리
             if self._feedback_queue:
                 await reporter.send("피드백 수신. 현재 스펙 루프를 중단하고 피드백을 먼저 반영합니다.")
